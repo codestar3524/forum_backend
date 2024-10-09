@@ -58,7 +58,7 @@ const UserSchema = new mongoose.Schema({
   // New fields for approval and rejection status
   approved: {
     type: Boolean,
-    default: true,
+    default: false,
   }
 });
 
