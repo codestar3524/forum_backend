@@ -13,9 +13,9 @@ const generatePasswordResetToken = require("../middlewares/generatePasswordReset
 
 module.exports = {
   register: async (req, res) => {
-    const { username, email, password, firstName, lastName } = req.body;
+    const { username, email, password, firstName, lastName,walletAddress } = req.body;
     
-    if (!username || !email || !password || !firstName || !lastName) {
+    if (!username || !email || !password || !firstName || !lastName || !walletAddress) {
       return res.status(422).json({
         message: "Required filed(s) are missing!",
       });
@@ -42,6 +42,7 @@ module.exports = {
         email: email,
         username: username,
         password: hashedPassword,
+        walletAddress: walletAddress
       });
       
       // const token = generateEmailVerifyToken(email);

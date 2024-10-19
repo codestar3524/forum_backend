@@ -39,6 +39,10 @@ const UserSchema = new mongoose.Schema({
     maxlength: 500,
     default: "A new user of ONetwork forum",
   },
+  walletAddress: {
+    type: String,
+    maxlength: 500,
+  },
   isVerified: {
     type: Boolean,
     default: false,
