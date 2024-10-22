@@ -3,8 +3,9 @@ const { cloudinary } = require("../utils/cloudinary");
 const fs = require("fs-extra");
 const User = require("../models/userModel");
 const Comment = require("../models/commentModel");
-const Topic = require("../models/topicModel");
-const Tag = require("../models/tagModel");
+// const Topic = require("../models/topicModel");
+// const Tag = require("../models/tagModel");
+const YanContract = require('../utils/contract');
 
 module.exports = {
   getUsers: async (req, res) => {
@@ -33,8 +34,13 @@ module.exports = {
   },
   updateUser: async (req, res) => {
     const { id } = req.params;
+    const user = {
+      username: req.body.username,
+      firstName: req.body.firstName,
+      lastName: req.body.lastName,
+    }
     try {
-      const updatedUser = await User.findByIdAndUpdate(id, req.body, { new: true }).select('-password');
+      const updatedUser = await User.findByIdAndUpdate(id, user, { new: true });
       return res.status(200).json({
         message: "User updated successfully",
         updatedUser,
@@ -48,11 +54,11 @@ module.exports = {
     try {
       const { userId } = req.params;
       const deletedUser = await User.findByIdAndDelete(userId);
-  
+
       if (!deletedUser) {
         return res.status(404).json({ message: 'User not found' });
       }
-  
+
       return res.status(200).json({ message: 'User deleted successfully', deletedUser });
     } catch (error) {
       return res.status(500).json({ error: 'Server error' });
@@ -60,6 +66,7 @@ module.exports = {
   },
 
   // In your user controller
+  // Backend function for approving a user
   approveUser: async (req, res) => {
     try {
       const { userId } = req.params;
@@ -69,8 +76,29 @@ module.exports = {
         return res.status(404).json({ error: 'User not found' });
       }
 
-      return res.status(200).json({ message: 'User approved successfully', user });
+      const { walletAddress } = user;
+
+      // Await the transfer and handle possible errors
+      const transactionReceipt = await YanContract.mintTokens(walletAddress, 10);
+
+      if (!transactionReceipt) {
+        return res.status(500).json({ error: 'Token transfer failed' });
+      }
+
+      // Return only the user object
+      return res.status(200).json({
+        message: 'User approved successfully',
+        user: {
+          _id: user._id,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          approved: user.approved
+        }
+      });
+
     } catch (error) {
+      console.error('Error approving user:', error); // Log the error for debugging
       return res.status(500).json({ error: 'Server error' });
     }
   },
@@ -83,9 +111,25 @@ module.exports = {
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
+      const transactionReceipt = await YanContract.burnAllTokens(user.walletAddress);
 
-      return res.status(200).json({ message: 'User rejected successfully', user });
+      if (!transactionReceipt) {
+        return res.status(500).json({ error: 'Token burn failed' });
+      }
+
+      return res.status(200).json({
+        message: 'User rejected!',
+        user: {
+          _id: user._id,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          approved: user.approved
+        }
+      });
     } catch (error) {
+      console.log(error);
+      
       return res.status(500).json({ error: 'Server error' });
     }
   },
@@ -178,14 +222,14 @@ module.exports = {
     if (_id !== req.user._id) {
       return res.status(401).json({ message: "Unauthorized!" });
     }
-  
+
     try {
       // Find the user by their ID
       const user = await User.findById(_id);
       if (!user) {
         return res.status(404).json({ message: "User not found!" });
       }
-  
+
       // Handle username uniqueness if provided
       if (req.body.userName && req.body.userName.trim() !== "" && req.body.userName !== user.username) {
         const existingUser = await User.findOne({ username: req.body.userName });
@@ -194,27 +238,8 @@ module.exports = {
         }
         user.username = req.body.userName.trim();
       }
-  
-      // Handle email uniqueness if provided
-      if (req.body.email && req.body.email.trim() !== "" && req.body.email !== user.email) {
-        const existingUser = await User.findOne({ email: req.body.email });
-        if (existingUser) {
-          return res.status(422).json({ message: "Email already in use!" });
-        }
-        user.email = req.body.email.trim();
-      }
-  
-      // Update basic profile information (only if provided)
-      if (req.body.firstname && req.body.firstname.trim() !== "") {
-        user.firstName = req.body.firstname.trim();
-      }
-      if (req.body.lastname && req.body.lastname.trim() !== "") {
-        user.lastName = req.body.lastname.trim();
-      }
-      if (req.body.bio && req.body.bio.trim() !== "") {
-        user.bio = req.body.bio.trim();
-      }
-  
+
+
       // Update password if current and new password are provided
       if (
         req.body.password &&
@@ -328,17 +353,6 @@ module.exports = {
       }
 
       const savedUser = await user.save();
-      if (req.body.userName.trim() !== "") {
-        await Topic.updateMany(
-          { owner: oldUsername },
-          { $set: { owner: savedUser.username } }
-        );
-        await Comment.updateMany(
-          { owner: oldUsername },
-          { $set: { owner: savedUser.username } }
-        );
-      }
-      delete oldUsername;
       delete user;
       return res.status(200).json({
         updatedUser: savedUser,

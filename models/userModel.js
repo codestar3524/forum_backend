@@ -2,17 +2,19 @@ const mongoose = require("mongoose");
 const AutoIncrement = require("mongoose-sequence")(mongoose);
 
 const UserSchema = new mongoose.Schema({
-  firstName: String,
-  lastName: String,
-  email: {
+  firstName: {
     type: String,
-    unique: true,
+    required: true,
+  },
+  lastName: {
+    type: String,
+    required: true,
   },
   username: {
     type: String,
     unique: true,
+    required: true,
   },
-  password: String,
   avatar: {
     public_id: {
       type: String,
@@ -20,7 +22,7 @@ const UserSchema = new mongoose.Schema({
     },
     url: {
       type: String,
-      default: "https://i.imgur.com/iV7Sdgm.jpg",
+      default: "https://res.cloudinary.com/forumcloud/image/upload/v1729441784/3d-rendering-boy-business-suit-with-smile_1142-41042_hbvwm4.jpg",
     },
   },
   cover: {
@@ -30,60 +32,52 @@ const UserSchema = new mongoose.Schema({
     },
     url: {
       type: String,
-      default: "wallpaper.jpg",
+      default: "https://res.cloudinary.com/forumcloud/image/upload/v1729442232/wallpaper_zbain0.jpg",
     },
-  },
-  bio: {
-    type: String,
-    trim: true,
-    maxlength: 500,
-    default: "A new user of ONetwork forum",
   },
   walletAddress: {
     type: String,
+    unique: true,
     maxlength: 500,
+    required: true,
   },
   isVerified: {
     type: Boolean,
     default: false,
   },
-  following: [
-    {
-      type: String,
-      default: [],
-    },
-  ],
-  followers: [
-    {
-      type: String,
-      default: [],
-    },
-  ],
-  // New fields for approval and rejection status
+  following: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  }],
+  followers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  }],
   approved: {
     type: Boolean,
     default: false,
+  },
+  role: {
+    type: String,
+    enum: ["admin", "user"],
+    default: "user",
+  },
+  tokenBalance: {
+    type: Number,
+    default: 0,
+  },
+  totalStaked: {
+    type: Number,
+    default: 0,
   }
+}, {
+  timestamps: true,
 });
 
-// Virtuals for user following and followers
-UserSchema.virtual("user_following", {
-  ref: "User",
-  localField: "following",
-  foreignField: "username",
-});
-
-UserSchema.virtual("user_followers", {
-  ref: "User",
-  localField: "followers",
-  foreignField: "username",
-});
-
-// Enable virtuals for JSON and object output
+UserSchema.plugin(AutoIncrement, { inc_field: "userID" });
 UserSchema.set("toObject", { virtuals: true });
 UserSchema.set("toJSON", { virtuals: true });
 
-// Auto increment the userID field
-UserSchema.plugin(AutoIncrement, { inc_field: "userID" });
+const User = mongoose.model("User", UserSchema);
 
-module.exports = mongoose.model("User", UserSchema);
+module.exports = User;

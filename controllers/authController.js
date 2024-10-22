@@ -13,80 +13,78 @@ const generatePasswordResetToken = require("../middlewares/generatePasswordReset
 
 module.exports = {
   register: async (req, res) => {
-    const { username, email, password, firstName, lastName,walletAddress } = req.body;
-    
-    if (!username || !email || !password || !firstName || !lastName || !walletAddress) {
+    const { username, firstName, lastName, walletAddress } = req.body;
+  console.log(req.body);
+  
+    // Check if all required fields are provided
+    if (!username || !firstName || !lastName || !walletAddress) {
       return res.status(422).json({
-        message: "Required filed(s) are missing!",
+        message: "Required field(s) are missing!",
       });
     }
+  
     try {
-      let existingUser = await User.findOne({ email });
+      // Check the current user count in the database
+      const userCount = await User.countDocuments();
+  
+      // Check if the wallet address already exists
+      const existingUser = await User.findOne({ walletAddress });
       if (existingUser) {
         return res.status(400).json({
-          message: "An account already exists with this email!",
+          message: "An account already exists with this wallet address!",
         });
       }
-      existingUser = null;
-      existingUser = await User.findOne({ username }, { __v: 0, password: 0 });
-      if (existingUser) {
-        return res.status(400).json({
-          message: "An account already exists with this username!",
-        });
-      }
-      delete existingUser;
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await User.create({
-        firstName: firstName,
-        lastName: lastName,
-        email: email,
-        username: username,
-        password: hashedPassword,
-        walletAddress: walletAddress
+  
+      // Set role and approval status based on the user count (first user is admin)
+      const isAdmin = userCount === 0;
+      const role = isAdmin ? 'admin' : 'user';
+      const approved = isAdmin ? true : false;
+  
+      // Create a new user
+      const newUser = await User.create({
+        firstName,
+        lastName,
+        username,
+        walletAddress,
+        role,
+        approved,
       });
-      
-      // const token = generateEmailVerifyToken(email);
-
-      // let options = {
-      //   email: email,
-      //   subject: "Verify your email address",
-      //   html: verifyEmailTemplate(user, token),
-      // };
-
-      // await sendEmail(options);
-
+  
+      // Respond with success message
       return res.status(201).json({
-        message: `Your account created successfully. You can use after administrator approve`,
+        message: isAdmin
+          ? "Your account has been created successfully as an admin and approved."
+          : "Your account has been created successfully. You can use it after administrator approval.",
       });
-    } catch (err) {
-      return res.status(400).json({
-        message: err.message,
+  
+    } catch (error) {
+      return res.status(500).json({
+        message: `Error creating user: ${error.message}`,
       });
     }
-  },
+  },   
   login: async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const { username, walletAddress } = req.body;
+    
+    if (!username || !walletAddress) {
       return res.status(400).json({
-        message: "Email or password are missing!",
+        message: "username and walletAddress is missing!",
       });
     }
     try {
-      const userExisted = await User.findOne({ email });
+      const userExisted = await User.findOne({ walletAddress });
       if (!userExisted) {
         return res.status(400).json({
-          message: "No such user with this email!",
+          message: "No such user with this address!",
         });
       }
-      const passwordValid = await bcrypt.compare(
-        password,
-        userExisted.password
-      );
-      if (!passwordValid) {
+      
+      if (userExisted.username != username) {
         return res.status(400).json({
-          message: "Invalid password!",
+          message: "NickName isn't match with your wallet",
         });
       }
+      
       if (!userExisted.approved) {
         return res.status(400).json({
           message: "Your account deactivate. Please reach out to administrator.",
@@ -105,7 +103,6 @@ module.exports = {
         path: "/refresh_token",
       });
 
-      delete userExisted.password;
       delete userExisted.__v;
 
       return res.status(200).json({
@@ -127,38 +124,38 @@ module.exports = {
         message: "Unauthorized, You must login!",
       });
     }
+  
     try {
-      const payload = jwt.verify(
-        refreshToken,
-        process.env.REFRESH_TOKEN_SECRET_KEY
-      );
-      const user = await User.findOne(
-        { email: payload.email },
-        { __v: 0, password: 0 }
-      );
+      const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET_KEY);
+      const user = await User.findOne({ walletAddress: payload.walletAddress }, { __v: 0 });
+  
       if (!user) {
-        return res.json({
+        return res.status(403).json({
           message: "Unauthorized, You must login!",
         });
       }
-
+  
       const expiration = payload.exp - Math.floor(Date.now() / 1000);
       const newAccessToken = generateAccessToken(user);
       const newRefreshToken = generateRefreshToken(user, expiration);
-
+  
+      // Set the new refresh token in the cookie
       res.cookie("refreshToken", newRefreshToken, {
-        maxAge: expiration * 1000,
+        maxAge: expiration * 1000, // Ensure correct expiration time
         httpOnly: true,
         sameSite: "Strict",
         path: "/refresh_token",
       });
-
+  
       return res.json({
         user: user,
-        token: newAccessToken,
+        token: newAccessToken, // Send the new access token to the client
       });
     } catch (err) {
       console.log(err);
+      return res.status(500).json({
+        message: "Token refresh failed",
+      });
     }
   },
   logout: async (req, res) => {

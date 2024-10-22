@@ -5,7 +5,7 @@ const validateAccessToken = require("../middlewares/validateAccessToken");
 const router = express.Router();
 
 router.get("/", topicController.getAllTopics);
-router.get("/spaces", topicController.getSpaces);
+// router.get("/spaces", topicController.getSpaces);
 router.get("/contributors", topicController.getTopContributors);
 router.get("/:id/:slug", topicController.getTopic);
 router.post("/", validateAccessToken, topicController.addTopic);
